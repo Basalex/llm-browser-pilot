@@ -1,0 +1,18 @@
+{
+  "name": "llm-browser-pilot",
+  "version": "1.0.0",
+  "description": "Chrome extension + local CLI bridge (no auth) for running local LLM CLIs in the browser with custom domain-bound modules.",
+  "main": "bridge/server.js",
+  "scripts": {
+    "start": "node bridge/server.js",
+    "test": "node bridge/test-smoke.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "llm",
+    "cli",
+    "browser-pilot",
+    "modules"
+  ],
+  "license": "MIT"
+}

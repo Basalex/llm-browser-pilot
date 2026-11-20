@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Browser Pilot</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-row">
+        <div class="brand">
+          <span class="brand-dot" id="bridgeDot" title="Local CLI Bridge status"></span>
+          <span class="brand-name">LLM Browser Pilot</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-btn" id="refreshProvidersBtn" title="Reconnect &amp; refresh CLIs">↻</button>
+          <button class="btn-secondary btn-sm" id="newChatBtn" title="Start a new chat">＋ New</button>
+        </div>
+      </div>
+
+      <div class="selector-row">
+        <select id="providerSelect" class="select" title="Select CLI Provider"></select>
+        <select id="modelSelect" class="select" title="Select Model"></select>
+      </div>
+
+      <div class="context-bar">
+        <span class="domain-pill" id="domainPill" title="Current active tab">No active tab</span>
+        <button class="icon-btn" id="siteNotesBtn" title="Site Memory (.md notes for this domain)">📝</button>
+        <span class="module-pill" id="activeModulePill" title="Active module">🧭 Browser Pilot</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="pilot">💬 Pilot</button>
+      <button class="tab" data-tab="history">🕘 History</button>
+      <button class="tab" data-tab="modules">🧩 Modules <span class="tab-badge hidden" id="matchedCountBadge">0</span></button>
+      <button class="tab" data-tab="settings">⚙ Settings</button>
+    </nav>
+
+    <div id="runningBar" class="running-bar hidden">
+      <div class="running-info">
+        <span class="spinner"></span>
+        <span id="runningText">Working...</span>
+      </div>
+      <button id="topStopBtn" class="btn-danger btn-sm">Stop</button>
+    </div>
+
+    <!-- PILOT CHAT VIEW -->
+    <main class="view active" id="view-pilot">
+      <div id="customModulePanel" class="custom-panel hidden"></div>
+      <div id="fileAttachmentsPanel" class="file-panel hidden">
+        <div class="file-panel-header">
+          <span class="file-panel-title" id="filePanelTitle">📎 Attached Files (0)</span>
+          <div class="file-panel-actions">
+            <label class="btn-secondary btn-xs file-label" title="Attach .txt, .md, .json, .csv, .docx, .pdf, or code files">
+              ＋ Attach File
+              <input type="file" id="attachFileInput" multiple accept=".txt,.md,.markdown,.json,.csv,.tsv,.yaml,.yml,.xml,.html,.htm,.rtf,.log,.js,.ts,.py,.docx,.pdf" hidden />
+            </label>
+            <button id="pasteTextFileBtn" class="btn-secondary btn-xs" title="Paste resume or text snippet">📋 Paste</button>
+            <button id="clearFilesBtn" class="btn-danger btn-xs hidden" title="Remove all attached files">🗑️</button>
+          </div>
+        </div>
+        <div id="filePanelError" class="file-panel-error hidden"></div>
+        <div id="attachedFilesList" class="attached-files-list"></div>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">🧭</div>
+          <div class="empty-title">Ready to pilot this page</div>
+          <div class="empty-sub">Runs local CLIs with zero auth. Toggle "Page Context" below to let the LLM read &amp; automate this tab.</div>
+        </div>
+      </div>
+
+      <div class="quick-actions" id="quickActions"></div>
+
+      <div class="composer">
+        <div class="composer-toggles">
+          <label class="toggle-chip">
+            <input type="checkbox" id="includeContextToggle" checked />
+            <span>Page Context</span>
+          </label>
+          <label class="toggle-chip">
+            <input type="checkbox" id="autoRunToggle" />
+            <span>Auto-run actions</span>
+          </label>
+        </div>
+        <div class="composer-input-row">
+          <textarea id="promptInput" rows="2" placeholder="Ask about this page or command the browser..."></textarea>
+          <button id="sendBtn" class="btn-primary">Send</button>
+          <button id="stopBtn" class="btn-danger hidden">Stop</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- HISTORY VIEW -->
+    <section class="view" id="view-history">
+      <div class="section-header">
+        <div>
+          <h3>Chat History</h3>
+          <p class="muted">Resume any previous session and continue the conversation.</p>
+        </div>
+        <div class="btn-row">
+          <button id="historyNewChatBtn" class="btn-primary btn-sm">＋ New Chat</button>
+          <button id="clearHistoryBtn" class="btn-danger btn-sm">Clear All</button>
+        </div>
+      </div>
+      <div id="historyList" class="modules-list"></div>
+    </section>
+
+    <!-- MODULES VIEW -->
+    <section class="view" id="view-modules">
+      <div class="section-header">
+        <div>
+          <h3>Modules &amp; Site Bindings</h3>
+          <p class="muted">Bind modules to domains or URLs for automatic activation.</p>
+        </div>
+        <button id="newModuleBtn" class="btn-primary btn-sm">＋ New Module</button>
+      </div>
+
+      <div id="modulesList" class="modules-list"></div>
+    </section>
+
+    <!-- MODULE EDITOR MODAL -->
+    <div id="moduleEditorModal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="editorTitle">New Module</h3>
+          <button id="closeEditorBtn" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row two-col">
+            <label>Icon
+              <input type="text" id="modIcon" value="🧩" maxlength="4" />
+            </label>
+            <label>Name
+              <input type="text" id="modName" placeholder="e.g. YouTube Summarizer" />
+            </label>
+          </div>
+          <label>Description
+            <input type="text" id="modDesc" placeholder="What does this module do?" />
+          </label>
+          <label>System Prompt
+            <textarea id="modSystemPrompt" rows="4" placeholder="Instructions injected into every prompt when this module is active..."></textarea>
+          </label>
+          <label>Domain / Page Bindings (one per line: github.com, *.youtube.com/*, or /regex/)
+            <textarea id="modBindings" rows="2" placeholder="github.com&#10;*.docs.google.com/*"></textarea>
+          </label>
+          <div class="form-row two-col">
+            <label class="checkbox-label">
+              <input type="checkbox" id="modAutoActivate" checked />
+              <span>Auto-activate on match</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="modAutoExtract" checked />
+              <span>Auto-include page context</span>
+            </label>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="modSupportsFiles" />
+            <span>Enable File Attachments Panel (resume, docs, notes)</span>
+          </label>
+          <div class="form-row two-col">
+            <label>Preferred Provider
+              <select id="modProvider"></select>
+            </label>
+            <label>Preferred Model
+              <input type="text" id="modModel" placeholder="Optional model ID" />
+            </label>
+          </div>
+          <label>Quick Actions (one per line: Label | Prompt)
+            <textarea id="modQuickActions" rows="3" placeholder="Summarize | Summarize this page&#10;Extract links | List all important links"></textarea>
+          </label>
+          <label>Custom Widget HTML (optional, use data-prompt="..." on buttons)
+            <textarea id="modCustomHtml" rows="2" placeholder='<button data-prompt="Audit SEO on this page">Run SEO Audit</button>'></textarea>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button id="cancelEditorBtn" class="btn-secondary">Cancel</button>
+          <button id="saveModuleBtn" class="btn-primary">Save Module</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SITE MEMORY (.MD) MODAL -->
+    <div id="siteMemoryModal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>📝 Site Memory (.md)</h3>
+          <button id="closeSiteMemBtn" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <label>Domain
+            <select id="siteMemDomainSelect"></select>
+          </label>
+          <label>Markdown Notes (automatically injected for this site)
+            <textarea id="siteMemContent" rows="10" placeholder="# example.com&#10;- Tips, selectors, and lessons learned..."></textarea>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button id="deleteSiteMemBtn" class="btn-danger btn-sm">Delete</button>
+          <button id="cancelSiteMemBtn" class="btn-secondary">Cancel</button>
+          <button id="saveSiteMemBtn" class="btn-primary">Save .md</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATTACHED FILE PREVIEW / PASTE MODAL -->
+    <div id="fileModal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="fileModalTitle">📎 Attached File</h3>
+          <button id="closeFileModalBtn" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <label>File Name
+            <input type="text" id="fileModalName" placeholder="e.g. resume.md" />
+          </label>
+          <label>Content (seen by the LLM when enabled)
+            <textarea id="fileModalContent" rows="12" placeholder="Paste resume, profile details, or reference text here..."></textarea>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button id="cancelFileModalBtn" class="btn-secondary">Cancel</button>
+          <button id="saveFileModalBtn" class="btn-primary">Save File</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <section class="view" id="view-settings">
+      <div class="card">
+        <h4>Local CLI Bridge</h4>
+        <label>Bridge Server URL
+          <div class="input-with-btn">
+            <input type="text" id="bridgeUrlInput" value="http://127.0.0.1:4399" />
+            <button id="saveBridgeBtn" class="btn-primary btn-sm">Save</button>
+          </div>
+        </label>
+        <p class="muted small">Run <code>npm start</code> or <code>start-bridge.cmd</code> in <code>D:\projects\LLMBrowserPilot</code>. No auth or API keys required.</p>
+      </div>
+
+      <div class="card">
+        <div class="section-header">
+          <h4>Custom CLI Providers</h4>
+          <button id="addCustomCliBtn" class="btn-secondary btn-sm">＋ Add CLI</button>
+        </div>
+        <div id="customCliList" class="custom-cli-list"></div>
+      </div>
+
+      <div class="card">
+        <h4>Modules Backup</h4>
+        <div class="btn-row">
+          <button id="exportModulesBtn" class="btn-secondary btn-sm">Export JSON</button>
+          <label class="btn-secondary btn-sm file-label">
+            Import JSON
+            <input type="file" id="importModulesInput" accept=".json" hidden />
+          </label>
+          <button id="resetModulesBtn" class="btn-danger btn-sm">Reset Defaults</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="modules.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
